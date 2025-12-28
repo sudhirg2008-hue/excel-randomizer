@@ -41,16 +41,21 @@
             const [searchResults, setSearchResults] = useState([]);
             const [isSpeaking, setIsSpeaking] = useState(false);
             const [isPaused, setIsPaused] = useState(false);
+            const [activeVoiceName, setActiveVoiceName] = useState("Loading...");
 
             const theme = darkMode ? darkTheme : lightTheme;
 
-            // Voice Loading Logic for iPhone
-            const getDanielVoice = () => {
+            // Logic to find Alex
+            const getBestVoice = () => {
                 const voices = window.speechSynthesis.getVoices();
-                // Priority 1: Daniel (Enhanced) | Priority 2: Daniel | Priority 3: any en-GB
-                return voices.find(v => v.name.includes("Daniel") && v.name.includes("Enhanced")) ||
-                       voices.find(v => v.name.includes("Daniel")) ||
-                       voices.find(v => v.lang === "en-GB" || v.lang === "en_GB");
+                // Priority: 1. Alex | 2. Daniel | 3. Any English
+                const alex = voices.find(v => v.name.toLowerCase().includes("alex"));
+                const daniel = voices.find(v => v.name.toLowerCase().includes("daniel"));
+                const anyEng = voices.find(v => v.lang.startsWith("en"));
+                
+                const selected = alex || daniel || anyEng;
+                if (selected) setActiveVoiceName(selected.name);
+                return selected;
             };
 
             const handleToggleSpeech = () => {
@@ -65,13 +70,12 @@
                     const text = currentRow.data[colIndex];
                     const utterance = new SpeechSynthesisUtterance(text);
                     
-                    const voice = getDanielVoice();
+                    const voice = getBestVoice();
                     if (voice) {
                         utterance.voice = voice;
-                        utterance.lang = 'en-GB';
                     }
 
-                    utterance.rate = 0.9;
+                    utterance.rate = 1.0; 
                     utterance.onstart = () => { setIsSpeaking(true); setIsPaused(false); };
                     utterance.onend = () => { setIsSpeaking(false); setIsPaused(false); };
                     utterance.onerror = () => { setIsSpeaking(false); setIsPaused(false); };
@@ -147,6 +151,7 @@
                                         reader.onload = (evt) => {
                                             const wb = XLSX.read(evt.target.result, { type: 'binary' });
                                             setWorkbook(wb); setSheetNames(wb.SheetNames); setSelectedSheets([]);
+                                            getBestVoice();
                                         };
                                         reader.readAsBinaryString(e.target.files[0]);
                                     }} style={{ width: '150px' }} />
@@ -173,40 +178,28 @@
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                             <div style={{ display: 'flex', padding: '10px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center', background: theme.card }}>
-                                <span style={{ fontSize: '12px' }}>{currentRow.sheet} | {String.fromCharCode(65 + colIndex)}{rowIndex + 1}</span>
+                                <span style={{ fontSize: '11px' }}>{currentRow.sheet} | {String.fromCharCode(65 + colIndex)}{rowIndex + 1}</span>
                                 <div style={{ display: 'flex', gap: '5px' }}>
                                     <input placeholder="Find..." style={{ width: '80px', padding: '5px', borderRadius: '5px', border: `1px solid ${theme.border}`, background: theme.bg, color: theme.text }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
                                     <button onClick={handleSearch} style={{ padding: '5px 10px', background: theme.primary, color: '#fff' }}>🔍</button>
                                 </div>
                             </div>
                             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                                {searchResults.length > 0 && (
-                                    <div className="sidebar-scroll" style={{ width: '150px', background: theme.card, borderRight: `1px solid ${theme.border}`, overflowY: 'auto', padding: '10px', fontSize: '11px' }}>
-                                        <button onClick={() => setSearchResults([])} style={{ color: 'red', marginBottom: '10px' }}>Close Results</button>
-                                        {searchResults.map((r, i) => (
-                                            <div key={i} onClick={() => updateActiveCell(r.sheet, r.rIdx, r.cIdx)} style={{ padding: '8px 0', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer' }}>
-                                                {String.fromCharCode(65 + r.cIdx)}{r.rIdx+1}: {r.text.substring(0,20)}...
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
                                 <div className="cell-display" style={{ flex: 1, padding: '30px', fontSize: '24px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>{currentRow.data[colIndex]}</div>
                             </div>
                             <div style={{ padding: '20px', background: theme.card, borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
+                                <div style={{ fontSize: '10px', opacity: 0.6 }}>Voice: {activeVoiceName}</div>
                                 <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                                     <button onClick={handleToggleSpeech} style={{ flex: 2, padding: '15px', background: isPaused ? '#ffc107' : (isSpeaking ? '#fd7e14' : '#28a745'), color: '#fff', fontWeight: 'bold' }}>
-                                        {isPaused ? '▶️ RESUME' : (isSpeaking ? '⏸️ PAUSE' : '🔊 READ (UK)')}
+                                        {isPaused ? '▶️ RESUME' : (isSpeaking ? '⏸️ PAUSE' : '🔊 READ')}
                                     </button>
                                     {(isSpeaking || isPaused) && <button onClick={handleStopSpeech} style={{ flex: 0.5, background: '#dc3545', color: '#fff' }}>⏹️</button>}
                                     <button onClick={pickRandom} style={{ flex: 1.5, background: theme.primary, color: '#fff', fontWeight: 'bold' }}>NEXT</button>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                                    {hasContent(-1, 0) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex - 1, colIndex)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>↑</button>}
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        {hasContent(0, -1) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>←</button>}
-                                        {hasContent(1, 0) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>↓</button>}
-                                        {hasContent(0, 1) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>→</button>}
-                                    </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {hasContent(0, -1) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>←</button>}
+                                    {hasContent(1, 0) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>↓</button>}
+                                    {hasContent(0, 1) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ padding: '10px 30px', background: theme.navBtn, color: '#fff' }}>→</button>}
                                 </div>
                             </div>
                             <div style={{ position: 'fixed', bottom: '15px', right: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
