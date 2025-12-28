@@ -14,9 +14,10 @@
         button:active { transform: scale(0.95); opacity: 0.8; }
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-        .sheet-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .sheet-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #eee; font-size: 16px; }
         @media (max-width: 600px) {
             .cell-display { font-size: 20px !important; padding: 15px !important; }
+            .setup-card { width: 90% !important; max-width: 350px; }
         }
     </style>
 </head>
@@ -46,14 +47,9 @@
             const theme = darkMode ? darkTheme : lightTheme;
 
             useEffect(() => {
-                const loadVoices = () => {
-                    const voices = window.speechSynthesis.getVoices();
-                    setAvailableVoices(voices);
-                };
+                const loadVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
                 loadVoices();
-                if (window.speechSynthesis.onvoiceschanged !== undefined) {
-                    window.speechSynthesis.onvoiceschanged = loadVoices;
-                }
+                window.speechSynthesis.onvoiceschanged = loadVoices;
             }, []);
 
             const getColLetter = (index) => String.fromCharCode(65 + index);
@@ -77,14 +73,14 @@
             };
 
             const pickRandom = () => {
-                if (selectedSheets.length === 0) return alert("Please select at least one sheet.");
+                if (selectedSheets.length === 0) return alert("Please select at least one sheet first!");
                 let pool = [];
                 selectedSheets.forEach(name => {
                     const sheet = workbook.Sheets[name];
                     const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
                     data.forEach((row, rIdx) => { if (hasContent(row[0])) pool.push({ sheet: name, rIdx }); });
                 });
-                if (pool.length === 0) return alert("No content found.");
+                if (pool.length === 0) return alert("No content found in selected sheets.");
                 const pick = pool[Math.floor(Math.random() * pool.length)];
                 updateActiveCell(pick.sheet, pick.rIdx, 0);
             };
@@ -106,7 +102,6 @@
                 setSearchResults(results);
             };
 
-            // Enhanced Native Voice Selection
             const handleToggleSpeech = () => {
                 if (isSpeaking && !isPaused) {
                     window.speechSynthesis.pause();
@@ -118,19 +113,8 @@
                     window.speechSynthesis.cancel();
                     const text = currentRow.data[colIndex];
                     const utterance = new SpeechSynthesisUtterance(text);
-                    
-                    // Specific priority for Native Daniel (UK)
-                    const nativeVoice = availableVoices.find(v => 
-                        (v.name.includes("Daniel") && v.lang === "en-GB") || 
-                        (v.lang === "en-GB" && v.name.includes("Enhanced")) ||
-                        (v.lang === "en-GB")
-                    );
-                    
-                    if (nativeVoice) {
-                        utterance.voice = nativeVoice;
-                    }
-                    
-                    utterance.rate = 0.9; // Slightly slower for natural clarity
+                    const daniel = availableVoices.find(v => (v.name.includes("Daniel") && v.lang === "en-GB") || v.lang === "en-GB");
+                    if (daniel) utterance.voice = daniel;
                     utterance.onend = () => { setIsSpeaking(false); setIsPaused(false); };
                     window.speechSynthesis.speak(utterance);
                     setIsSpeaking(true);
@@ -148,57 +132,67 @@
                 <div style={{ height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text, display: 'flex', flexDirection: 'column' }}>
                     
                     {!currentRow ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                            <div style={{ padding: '25px', background: theme.card, borderRadius: '15px', width: '320px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
-                                <h2 style={{ margin: '0 0 15px 0' }}>Excel Randomizer</h2>
-                                <div style={{ marginBottom: '15px', textAlign: 'left', fontSize: '14px' }}>
-                                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', overflowY: 'auto', padding: '20px 0' }}>
+                            <div className="setup-card" style={{ padding: '25px', background: theme.card, borderRadius: '15px', width: '340px', boxShadow: '0 10px 30px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+                                <h2 style={{ margin: '0 0 15px 0', textAlign: 'center' }}>Excel Randomizer</h2>
+                                
+                                <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
                                         <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} /> 
                                         <span>Night Mode</span>
                                     </label>
+                                    <input type="file" onChange={(e) => {
+                                        const reader = new FileReader();
+                                        reader.onload = (evt) => {
+                                            const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                                            setWorkbook(wb); setSheetNames(wb.SheetNames); setSelectedSheets([]);
+                                        };
+                                        reader.readAsBinaryString(e.target.files[0]);
+                                    }} style={{ fontSize: '12px', maxWidth: '180px' }} />
                                 </div>
-                                
-                                <input type="file" onChange={(e) => {
-                                    const reader = new FileReader();
-                                    reader.onload = (evt) => {
-                                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                                        setWorkbook(wb); setSheetNames(wb.SheetNames); setSelectedSheets(wb.SheetNames);
-                                    };
-                                    reader.readAsBinaryString(e.target.files[0]);
-                                }} style={{ width: '100%', marginBottom: '15px', color: theme.text }} />
 
                                 {sheetNames.length > 0 && (
-                                    <div style={{ marginBottom: '15px' }}>
-                                        <div className="sidebar-scroll" style={{ maxHeight: '120px', overflowY: 'auto', textAlign: 'left', border: `1px solid ${theme.border}`, borderRadius: '8px' }}>
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '14px' }}>Sheets ({sheetNames.length}):</span>
+                                            <button onClick={() => setSelectedSheets(selectedSheets.length === sheetNames.length ? [] : [...sheetNames])} style={{ fontSize: '11px', background: theme.primary, color: '#fff', padding: '4px 10px' }}>
+                                                {selectedSheets.length === sheetNames.length ? 'Deselect All' : 'Select All'}
+                                            </button>
+                                        </div>
+                                        <div className="sidebar-scroll" style={{ maxHeight: '350px', overflowY: 'auto', border: `1px solid ${theme.border}`, borderRadius: '8px', background: theme.bg }}>
                                             {sheetNames.map(name => (
-                                                <label key={name} className="sheet-item">
+                                                <label key={name} className="sheet-item" style={{ borderBottom: `1px solid ${theme.border}` }}>
                                                     <input type="checkbox" checked={selectedSheets.includes(name)} onChange={() => setSelectedSheets(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name])} />
-                                                    <span>{name}</span>
+                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
                                                 </label>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-                                <button onClick={pickRandom} style={{ width: '100%', padding: '14px', background: theme.primary, color: '#fff', fontWeight: 'bold' }}>START</button>
+                                
+                                <button onClick={pickRandom} style={{ width: '100%', padding: '16px', background: '#28a745', color: '#fff', fontWeight: 'bold', fontSize: '18px' }}>START</button>
                             </div>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            {/* Navbar */}
                             <div style={{ display: 'flex', padding: '10px 15px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center', background: theme.card }}>
                                 <span style={{ fontWeight: 'bold', fontSize: '11px' }}>{currentRow.sheet} | {getColLetter(colIndex)}{rowIndex + 1}</span>
                                 <div style={{ display: 'flex', gap: '5px' }}>
-                                    <input placeholder="Find..." style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, background: theme.bg, color: theme.text, width: '70px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
+                                    <input placeholder="Find..." style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, background: theme.bg, color: theme.text, width: '75px', fontSize: '14px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
                                     <button onClick={handleSearch} style={{ padding: '8px 12px', background: theme.primary, color: '#fff' }}>🔍</button>
                                 </div>
                             </div>
 
                             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                                 {searchResults.length > 0 && (
-                                    <div className="sidebar-scroll" style={{ width: '150px', background: theme.card, borderRight: `1px solid ${theme.border}`, overflowY: 'auto', padding: '10px' }}>
+                                    <div className="sidebar-scroll" style={{ width: '180px', background: theme.card, borderRight: `1px solid ${theme.border}`, overflowY: 'auto', padding: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <small>Found: {searchResults.length}</small>
+                                            <button onClick={() => setSearchResults([])} style={{ background: 'none', color: 'red', fontSize: '12px' }}>✕</button>
+                                        </div>
                                         {searchResults.map((r, i) => (
-                                            <div key={i} onClick={() => updateActiveCell(r.sheet, r.rIdx, r.cIdx)} style={{ padding: '5px', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: '10px' }}>
-                                                {getColLetter(r.cIdx)}{r.rIdx+1}: {r.text.substring(0,15)}...
+                                            <div key={i} onClick={() => updateActiveCell(r.sheet, r.rIdx, r.cIdx)} style={{ padding: '8px', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: '11px' }}>
+                                                <b>{getColLetter(r.cIdx)}{r.rIdx+1}</b>: {r.text.substring(0,30)}...
                                             </div>
                                         ))}
                                     </div>
@@ -230,8 +224,8 @@
                             </div>
                             
                             <div style={{ position: 'fixed', bottom: '15px', right: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', background: theme.navBtn, color: '#fff', borderRadius: '50%' }}>{darkMode ? '☀️' : '🌙'}</button>
-                                <button onClick={() => {handleStopSpeech(); setCurrentRow(null);}} style={{ padding: '10px', background: '#666', color: '#fff', borderRadius: '50%' }}>⚙️</button>
+                                <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', background: theme.navBtn, color: '#fff', borderRadius: '50%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>{darkMode ? '☀️' : '🌙'}</button>
+                                <button onClick={() => {handleStopSpeech(); setCurrentRow(null);}} style={{ padding: '10px', background: '#666', color: '#fff', borderRadius: '50%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>⚙️</button>
                             </div>
                         </div>
                     )}
