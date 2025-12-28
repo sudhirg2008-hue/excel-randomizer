@@ -9,13 +9,13 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <style>
-        body { margin: 0; font-family: -apple-system, sans-serif; overflow: hidden; -webkit-tap-highlight-color: transparent; }
-        button { touch-action: manipulation; border: none; border-radius: 8px; cursor: pointer; }
+        body { margin: 0; font-family: -apple-system, sans-serif; overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s ease; }
+        button { touch-action: manipulation; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+        button:active { transform: scale(0.95); opacity: 0.8; }
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
         @media (max-width: 600px) {
             .cell-display { font-size: 20px !important; padding: 15px !important; }
-            .top-bar { flex-wrap: wrap; gap: 10px; }
         }
     </style>
 </head>
@@ -24,8 +24,8 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const lightTheme = { bg: '#f8f9fa', card: '#fff', text: '#212529', border: '#ddd', primary: '#007bff' };
-        const darkTheme = { bg: '#121212', card: '#1e1e1e', text: '#f8f9fa', border: '#333', primary: '#007bff' };
+        const lightTheme = { bg: '#f8f9fa', card: '#fff', text: '#212529', border: '#ddd', primary: '#007bff', navBtn: '#444' };
+        const darkTheme = { bg: '#121212', card: '#1e1e1e', text: '#f8f9fa', border: '#333', primary: '#007bff', navBtn: '#555' };
 
         function App() {
             const [workbook, setWorkbook] = useState(null);
@@ -38,16 +38,15 @@
             const [searchQuery, setSearchQuery] = useState("");
             const [searchResults, setSearchResults] = useState([]);
             
+            // Voice States
             const [isSpeaking, setIsSpeaking] = useState(false);
+            const [isPaused, setIsPaused] = useState(false);
             const [availableVoices, setAvailableVoices] = useState([]);
+
             const theme = darkMode ? darkTheme : lightTheme;
 
-            // Load Voices & target Daniel (UK)
             useEffect(() => {
-                const loadVoices = () => {
-                    const voices = window.speechSynthesis.getVoices();
-                    setAvailableVoices(voices);
-                };
+                const loadVoices = () => setAvailableVoices(window.speechSynthesis.getVoices());
                 loadVoices();
                 window.speechSynthesis.onvoiceschanged = loadVoices;
             }, []);
@@ -63,24 +62,24 @@
             };
 
             const updateActiveCell = (sheetName, rIdx, cIdx) => {
-                window.speechSynthesis.cancel();
-                setIsSpeaking(false);
+                handleStopSpeech();
                 const sheet = workbook.Sheets[sheetName];
                 const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
                 setCurrentRow({ data: data[rIdx], sheet: sheetName });
                 setColIndex(cIdx);
                 setRowIndex(rIdx);
-                setSearchResults([]); // Close search on selection
+                setSearchResults([]);
             };
 
             const pickRandom = () => {
+                if (selectedSheets.length === 0) return alert("Please select sheets first.");
                 let pool = [];
                 selectedSheets.forEach(name => {
                     const sheet = workbook.Sheets[name];
                     const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
                     data.forEach((row, rIdx) => { if (hasContent(row[0])) pool.push({ sheet: name, rIdx }); });
                 });
-                if (pool.length === 0) return alert("No data found");
+                if (pool.length === 0) return alert("No data found.");
                 const pick = pool[Math.floor(Math.random() * pool.length)];
                 updateActiveCell(pick.sheet, pick.rIdx, 0);
             };
@@ -102,91 +101,126 @@
                 setSearchResults(results);
             };
 
-            const handleSpeak = () => {
-                if (isSpeaking) {
-                    window.speechSynthesis.cancel();
-                    setIsSpeaking(false);
+            // VOICE LOGIC
+            const handleToggleSpeech = () => {
+                if (isSpeaking && !isPaused) {
+                    window.speechSynthesis.pause();
+                    setIsPaused(true);
+                } else if (isPaused) {
+                    window.speechSynthesis.resume();
+                    setIsPaused(false);
                 } else {
-                    const utterance = new SpeechSynthesisUtterance(currentRow.data[colIndex]);
-                    // Logic to find Daniel UK
+                    window.speechSynthesis.cancel();
+                    const text = currentRow.data[colIndex];
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    
+                    // Force Daniel (UK)
                     const daniel = availableVoices.find(v => v.name.includes("Daniel") || v.lang === "en-GB");
                     if (daniel) utterance.voice = daniel;
-                    utterance.onend = () => setIsSpeaking(false);
+                    
+                    utterance.onend = () => { setIsSpeaking(false); setIsPaused(false); };
                     window.speechSynthesis.speak(utterance);
                     setIsSpeaking(true);
+                    setIsPaused(false);
                 }
             };
 
+            const handleStopSpeech = () => {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
+                setIsPaused(false);
+            };
+
             return (
-                <div style={{ height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text, display: 'flex', flexDirection: 'column' }}>
                     
                     {!currentRow ? (
-                        <div style={{ padding: '40px', background: theme.card, borderRadius: '15px', marginTop: '50px', width: '300px', textAlign: 'center', boxShadow: '0 10px 20px rgba(0,0,0,0.2)' }}>
-                            <h2>Excel Randomizer</h2>
-                            <input type="file" onChange={(e) => {
-                                const reader = new FileReader();
-                                reader.onload = (evt) => {
-                                    const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                                    setWorkbook(wb); setSheetNames(wb.SheetNames);
-                                };
-                                reader.readAsBinaryString(e.target.files[0]);
-                            }} style={{ width: '100%', marginBottom: '20px' }} />
-                            
-                            <div style={{ maxHeight: '150px', overflowY: 'auto', textAlign: 'left', border: `1px solid ${theme.border}`, padding: '10px', borderRadius: '8px' }}>
-                                {sheetNames.map(name => (
-                                    <label key={name} style={{ display: 'block', margin: '5px 0' }}>
-                                        <input type="checkbox" checked={selectedSheets.includes(name)} onChange={() => setSelectedSheets(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name])} /> {name}
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <div style={{ padding: '30px', background: theme.card, borderRadius: '15px', width: '320px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+                                <h2 style={{ margin: '0 0 20px 0' }}>Excel Randomizer</h2>
+                                <div style={{ marginBottom: '15px', textAlign: 'left', fontSize: '14px' }}>
+                                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} /> 
+                                        <span>Night Mode</span>
                                     </label>
-                                ))}
+                                </div>
+                                <input type="file" onChange={(e) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (evt) => {
+                                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                                        setWorkbook(wb); setSheetNames(wb.SheetNames);
+                                        setSelectedSheets(wb.SheetNames);
+                                    };
+                                    reader.readAsBinaryString(e.target.files[0]);
+                                }} style={{ width: '100%', marginBottom: '20px', color: theme.text }} />
+                                <button onClick={pickRandom} style={{ width: '100%', padding: '14px', background: theme.primary, color: '#fff', fontWeight: 'bold' }}>START</button>
                             </div>
-                            <button onClick={pickRandom} style={{ width: '100%', padding: '12px', background: theme.primary, color: '#fff', marginTop: '20px', fontWeight: 'bold' }}>START</button>
                         </div>
                     ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                            {/* Top Bar */}
-                            <div style={{ display: 'flex', padding: '10px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{getColLetter(colIndex)}{rowIndex + 1}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            {/* Navbar */}
+                            <div style={{ display: 'flex', padding: '10px 15px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center', background: theme.card }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{currentRow.sheet} | {getColLetter(colIndex)}{rowIndex + 1}</span>
                                 <div style={{ display: 'flex', gap: '5px' }}>
-                                    <input placeholder="Search..." style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}` }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
-                                    <button onClick={handleSearch} style={{ padding: '8px', background: theme.primary, color: '#white' }}>🔍</button>
+                                    <input placeholder="Find..." style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${theme.border}`, background: theme.bg, color: theme.text, width: '80px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
+                                    <button onClick={handleSearch} style={{ padding: '8px 12px', background: theme.primary, color: '#fff' }}>🔍</button>
                                 </div>
                             </div>
 
-                            {/* Main Display */}
-                            <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+                            {/* Main Body */}
+                            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                                 {searchResults.length > 0 && (
-                                    <div className="sidebar-scroll" style={{ width: '200px', background: theme.card, borderRight: `1px solid ${theme.border}`, overflowY: 'auto', fontSize: '12px', padding: '10px' }}>
-                                        <b>Results ({searchResults.length})</b>
+                                    <div className="sidebar-scroll" style={{ width: '180px', background: theme.card, borderRight: `1px solid ${theme.border}`, overflowY: 'auto', padding: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <small>Found: {searchResults.length}</small>
+                                            <button onClick={() => setSearchResults([])} style={{ background: 'none', color: 'red', fontSize: '12px' }}>✕</button>
+                                        </div>
                                         {searchResults.map((r, i) => (
-                                            <div key={i} onClick={() => updateActiveCell(r.sheet, r.rIdx, r.cIdx)} style={{ padding: '8px', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer' }}>
-                                                {r.sheet} {getColLetter(r.cIdx)}{r.rIdx+1}: {r.text.substring(0,20)}...
+                                            <div key={i} onClick={() => updateActiveCell(r.sheet, r.rIdx, r.cIdx)} style={{ padding: '8px', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: '11px' }}>
+                                                <b>{getColLetter(r.cIdx)}{r.rIdx+1}</b>: {r.text.substring(0,30)}...
                                             </div>
                                         ))}
                                     </div>
                                 )}
-                                <div className="cell-display" style={{ flex: 1, padding: '30px', fontSize: '24px', overflowY: 'auto' }}>
+                                <div className="cell-display" style={{ flex: 1, padding: '25px', fontSize: '24px', overflowY: 'auto', color: theme.text, whiteSpace: 'pre-wrap' }}>
                                     {currentRow.data[colIndex]}
                                 </div>
                             </div>
 
                             {/* Controls */}
-                            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: theme.card, gap: '10px' }}>
-                                <button onClick={handleSpeak} style={{ padding: '10px 20px', background: isSpeaking ? '#ffc107' : '#28a745', color: '#fff' }}>
-                                    {isSpeaking ? 'STOP VOICE' : '🔊 READ (DANIEL UK)'}
-                                </button>
+                            <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: theme.card, borderTop: `1px solid ${theme.border}`, gap: '10px' }}>
                                 
-                                <button onClick={pickRandom} style={{ padding: '15px 40px', background: theme.primary, color: '#fff', fontWeight: 'bold', fontSize: '18px' }}>NEXT RANDOM</button>
+                                <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center' }}>
+                                    {/* Play / Pause Toggle */}
+                                    <button onClick={handleToggleSpeech} style={{ flex: 1, padding: '12px', background: isPaused ? '#ffc107' : (isSpeaking ? '#fd7e14' : '#28a745'), color: '#fff', fontWeight: 'bold' }}>
+                                        {isPaused ? '▶️ RESUME' : (isSpeaking ? '⏸️ PAUSE' : '🔊 READ')}
+                                    </button>
+                                    
+                                    {/* Stop Button (Only shows if speaking or paused) */}
+                                    {(isSpeaking || isPaused) && (
+                                        <button onClick={handleStopSpeech} style={{ padding: '12px 20px', background: '#dc3545', color: '#fff' }}>
+                                            ⏹️
+                                        </button>
+                                    )}
+
+                                    <button onClick={pickRandom} style={{ flex: 1, padding: '12px', background: theme.primary, color: '#fff', fontWeight: 'bold' }}>NEXT</button>
+                                </div>
                                 
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-                                    {hasContent(getNeighborData(-1, 0)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex - 1, colIndex)} style={{ padding: '10px 20px', background: '#444', color: '#fff' }}>↑</button>}
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        {hasContent(getNeighborData(0, -1)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ padding: '10px 20px', background: '#444', color: '#fff' }}>←</button>}
-                                        {hasContent(getNeighborData(1, 0)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ padding: '10px 20px', background: '#444', color: '#fff' }}>↓</button>}
-                                        {hasContent(getNeighborData(0, 1)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ padding: '10px 20px', background: '#444', color: '#fff' }}>→</button>}
+                                    {hasContent(getNeighborData(-1, 0)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex - 1, colIndex)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>↑</button>}
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        {hasContent(getNeighborData(0, -1)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>←</button>}
+                                        {hasContent(getNeighborData(1, 0)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>↓</button>}
+                                        {hasContent(getNeighborData(0, 1)) && <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>→</button>}
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={() => setCurrentRow(null)} style={{ position: 'fixed', bottom: '20px', right: '20px', padding: '10px', borderRadius: '50%', background: '#666', color: '#fff' }}>⚙️</button>
+                            
+                            {/* Float Buttons */}
+                            <div style={{ position: 'fixed', bottom: '15px', right: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', background: theme.navBtn, color: '#fff', borderRadius: '50%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>{darkMode ? '☀️' : '🌙'}</button>
+                                <button onClick={() => {handleStopSpeech(); setCurrentRow(null);}} style={{ padding: '10px', background: '#666', color: '#fff', borderRadius: '50%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>⚙️</button>
+                            </div>
                         </div>
                     )}
                 </div>
