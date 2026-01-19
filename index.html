@@ -16,8 +16,20 @@
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
         .sheet-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #eee; font-size: 16px; }
         .side-panel { position: absolute; top: 50px; bottom: 0; width: 220px; z-index: 10; transition: transform 0.3s ease; padding: 15px; box-sizing: border-box; overflow-y: auto; }
+        
+        /* The fix for paragraphing and line breaks */
+        .cell-display { 
+            flex: 1; 
+            padding: 25px; 
+            font-size: 22px; 
+            overflow-y: auto; 
+            white-space: pre-wrap; /* Respects line breaks from Excel */
+            word-wrap: break-word;
+            line-height: 1.5; /* Better readability for paragraphs */
+        }
+
         @media (max-width: 600px) {
-            .cell-display { font-size: 22px !important; padding: 20px !important; }
+            .cell-display { font-size: 20px; padding: 20px; }
         }
     </style>
 </head>
@@ -155,7 +167,6 @@
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            {/* Navbar */}
                             <div style={{ height: '50px', display: 'flex', padding: '0 15px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center', background: theme.card }}>
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <button onClick={() => {setShowSearch(!showSearch); setShowHistory(false);}} style={{ background: 'none', fontSize: '20px' }}>🔍</button>
@@ -165,7 +176,6 @@
                                 <button onClick={() => setCurrentRow(null)} style={{ padding: '5px 10px', background: '#666', color: '#fff', fontSize: '11px' }}>EXIT</button>
                             </div>
 
-                            {/* Search Panel */}
                             <div className="side-panel sidebar-scroll" style={{ left: 0, transform: showSearch ? 'translateX(0)' : 'translateX(-100%)', background: theme.panel, borderRight: `1px solid ${theme.border}` }}>
                                 <input placeholder="Search text..." style={{ width: '100%', padding: '8px', marginBottom: '10px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
                                 {searchResults.map((r, i) => (
@@ -175,7 +185,6 @@
                                 ))}
                             </div>
 
-                            {/* History Panel */}
                             <div className="side-panel sidebar-scroll" style={{ right: 0, transform: showHistory ? 'translateX(0)' : 'translateX(100%)', background: theme.panel, borderLeft: `1px solid ${theme.border}` }}>
                                 <h3>History</h3>
                                 {history.map((h, i) => (
@@ -185,12 +194,11 @@
                                 ))}
                             </div>
 
-                            {/* Main Content */}
-                            <div style={{ flex: 1, padding: '20px', fontSize: '24px', overflowY: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                            {/* Main Content with Fixed Paragraphing */}
+                            <div className="cell-display" style={{ color: theme.text }}>
                                 {currentRow.data[colIndex]}
                             </div>
 
-                            {/* Bottom Controls */}
                             <div style={{ padding: '15px', background: theme.card, borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                                     <button onClick={handleToggleSpeech} style={{ flex: 2, padding: '15px', background: isPaused ? '#ffc107' : (isSpeaking ? '#fd7e14' : '#28a745'), color: '#fff', fontSize: '18px' }}>
