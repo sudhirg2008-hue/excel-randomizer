@@ -27,6 +27,21 @@
             line-height: 1.5; 
         }
 
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            width: 180px;
+            margin: 0 auto;
+        }
+
+        .nav-btn {
+            background: #444;
+            color: white;
+            padding: 12px;
+            font-size: 18px;
+        }
+
         @media (max-width: 600px) {
             .cell-display { font-size: 20px; padding: 20px; }
         }
@@ -60,13 +75,6 @@
 
             const theme = darkMode ? darkTheme : lightTheme;
 
-            const getBestVoice = () => {
-                const voices = window.speechSynthesis.getVoices();
-                return voices.find(v => v.name.toLowerCase().includes("alex")) || 
-                       voices.find(v => v.name.toLowerCase().includes("daniel")) || 
-                       voices.find(v => v.lang.startsWith("en"));
-            };
-
             const handleToggleSpeech = () => {
                 if (isSpeaking && !isPaused) { window.speechSynthesis.pause(); setIsPaused(true); }
                 else if (isPaused) { window.speechSynthesis.resume(); setIsPaused(false); }
@@ -75,8 +83,6 @@
                     const text = currentRow.data[colIndex];
                     if(!text) return;
                     const utterance = new SpeechSynthesisUtterance(text);
-                    const voice = getBestVoice();
-                    if (voice) utterance.voice = voice;
                     utterance.onstart = () => { setIsSpeaking(true); setIsPaused(false); };
                     utterance.onend = () => { setIsSpeaking(false); setIsPaused(false); };
                     window.speechSynthesis.speak(utterance);
@@ -166,21 +172,47 @@
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            {/* Header */}
                             <div style={{ height: '50px', display: 'flex', padding: '0 15px', borderBottom: `1px solid ${theme.border}`, justifyContent: 'space-between', alignItems: 'center', background: theme.card }}>
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <button onClick={() => {setShowSearch(!showSearch); setShowHistory(false);}} style={{ background: 'none', fontSize: '20px' }}>🔍</button>
                                     <button onClick={() => {setShowHistory(!showHistory); setShowSearch(false);}} style={{ background: 'none', fontSize: '20px' }}>📜</button>
                                 </div>
-                                
-                                {/* Sheet Name and Cell Address Header */}
                                 <div style={{ textAlign: 'center', lineHeight: '1.1' }}>
-                                    <div style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase' }}>{currentRow.sheet}</div>
+                                    <div style={{ fontSize: '10px', opacity: 0.7 }}>{currentRow.sheet}</div>
                                     <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{String.fromCharCode(65 + colIndex)}{rowIndex + 1}</div>
                                 </div>
-
                                 <button onClick={() => setCurrentRow(null)} style={{ padding: '5px 10px', background: '#666', color: '#fff', fontSize: '11px' }}>EXIT</button>
                             </div>
 
+                            <div className="cell-display" style={{ color: theme.text }}>
+                                {currentRow.data[colIndex]}
+                            </div>
+
+                            {/* New Control Panel (Arrows moved up) */}
+                            <div style={{ padding: '15px', background: theme.card, borderTop: `1px solid ${theme.border}`, boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' }}>
+                                
+                                {/* Navigation Arrows Grid */}
+                                <div className="nav-grid">
+                                    <div />
+                                    <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex - 1, colIndex)} style={{ visibility: hasContent(-1, 0) ? 'visible' : 'hidden' }} className="nav-btn">↑</button>
+                                    <div />
+                                    
+                                    <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ visibility: hasContent(0, -1) ? 'visible' : 'hidden' }} className="nav-btn">←</button>
+                                    <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ visibility: hasContent(1, 0) ? 'visible' : 'hidden' }} className="nav-btn">↓</button>
+                                    <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ visibility: hasContent(0, 1) ? 'visible' : 'hidden' }} className="nav-btn">→</button>
+                                </div>
+
+                                {/* Main Action Buttons */}
+                                <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '15px' }}>
+                                    <button onClick={handleToggleSpeech} style={{ flex: 1, padding: '15px', background: isPaused ? '#ffc107' : (isSpeaking ? '#fd7e14' : '#28a745'), color: '#fff', fontSize: '18px' }}>
+                                        {isPaused ? '▶️' : (isSpeaking ? '⏸️' : '🔊')}
+                                    </button>
+                                    <button onClick={pickRandom} style={{ flex: 2, background: theme.primary, color: '#fff', fontWeight: 'bold', fontSize: '18px' }}>NEXT RANDOM</button>
+                                </div>
+                            </div>
+
+                            {/* Overlays */}
                             <div className="side-panel sidebar-scroll" style={{ left: 0, transform: showSearch ? 'translateX(0)' : 'translateX(-100%)', background: theme.panel, borderRight: `1px solid ${theme.border}` }}>
                                 <input placeholder="Search text..." style={{ width: '100%', padding: '8px', marginBottom: '10px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSearch()} />
                                 {searchResults.map((r, i) => (
@@ -189,37 +221,13 @@
                                     </div>
                                 ))}
                             </div>
-
                             <div className="side-panel sidebar-scroll" style={{ right: 0, transform: showHistory ? 'translateX(0)' : 'translateX(100%)', background: theme.panel, borderLeft: `1px solid ${theme.border}` }}>
                                 <h3>History</h3>
                                 {history.map((h, i) => (
-                                    <div key={i} onClick={() => {updateActiveCell(h.sheet, h.rIdx, h.cIdx, true); setShowHistory(false);}} style={{ padding: '8px', borderBottom: '1px solid #ccc', fontSize: '12px', cursor: 'pointer' }}>
-                                        {h.text.substring(0, 30)}...
-                                    </div>
+                                    <div key={i} onClick={() => {updateActiveCell(h.sheet, h.rIdx, h.cIdx, true); setShowHistory(false);}} style={{ padding: '8px', borderBottom: '1px solid #ccc', fontSize: '12px', cursor: 'pointer' }}>{h.text.substring(0, 30)}...</div>
                                 ))}
                             </div>
-
-                            <div className="cell-display" style={{ color: theme.text }}>
-                                {currentRow.data[colIndex]}
-                            </div>
-
-                            <div style={{ padding: '15px', background: theme.card, borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                                    <button onClick={handleToggleSpeech} style={{ flex: 2, padding: '15px', background: isPaused ? '#ffc107' : (isSpeaking ? '#fd7e14' : '#28a745'), color: '#fff', fontSize: '18px' }}>
-                                        {isPaused ? '▶️' : (isSpeaking ? '⏸️' : '🔊')}
-                                    </button>
-                                    <button onClick={pickRandom} style={{ flex: 1.5, background: theme.primary, color: '#fff', fontWeight: 'bold' }}>NEXT</button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                                    <div />
-                                    {hasContent(-1, 0) ? <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex - 1, colIndex)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>↑</button> : <div />}
-                                    <div />
-                                    {hasContent(0, -1) ? <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex - 1)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>←</button> : <div />}
-                                    {hasContent(1, 0) ? <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex + 1, colIndex)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>↓</button> : <div />}
-                                    {hasContent(0, 1) ? <button onClick={() => updateActiveCell(currentRow.sheet, rowIndex, colIndex + 1)} style={{ padding: '10px 25px', background: theme.navBtn, color: '#fff' }}>→</button> : <div />}
-                                </div>
-                            </div>
-                            <button onClick={() => setDarkMode(!darkMode)} style={{ position: 'fixed', bottom: '10px', right: '10px', padding: '10px', borderRadius: '50%', background: theme.navBtn, color: '#fff' }}>{darkMode ? '☀️' : '🌙'}</button>
+                            <button onClick={() => setDarkMode(!darkMode)} style={{ position: 'fixed', bottom: '100px', right: '10px', padding: '10px', borderRadius: '50%', background: theme.navBtn, color: '#fff', opacity: 0.5 }}>{darkMode ? '☀️' : '🌙'}</button>
                         </div>
                     )}
                 </div>
