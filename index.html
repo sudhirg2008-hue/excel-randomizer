@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>Excel Randomizer Pro</title>
-    <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="vendor/react.production.min.js"></script>
+    <script src="vendor/react-dom.production.min.js"></script>
+    <script src="vendor/xlsx.full.min.js"></script>
     <style>
         body { margin: 0; font-family: -apple-system, sans-serif; overflow: hidden; -webkit-tap-highlight-color: transparent; transition: background 0.3s ease; }
         button { touch-action: manipulation; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
@@ -49,6 +49,9 @@
 <body>
     <div id="root"><p style="padding:24px;font-family:sans-serif;color:#333">Loading Excel Randomizer…</p></div>
     <script>
+if (typeof React === 'undefined' || typeof ReactDOM === 'undefined' || typeof XLSX === 'undefined') {
+  document.getElementById('root').innerHTML = '<p style="padding:24px;font-family:sans-serif;color:#c00">Failed to load app. Please hard-refresh (Cmd+Shift+R).</p>';
+} else {
 const {
   useState,
   useEffect
@@ -452,6 +455,8 @@ function App() {
     }
   }, darkMode ? '☀️' : '🌙')));
 }
-ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));    </script>
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+}
+    </script>
 </body>
 </html>
